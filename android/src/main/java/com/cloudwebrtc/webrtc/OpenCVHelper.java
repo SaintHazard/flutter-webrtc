@@ -1,5 +1,6 @@
 package com.cloudwebrtc.webrtc;
 
+import android.graphics.Color;
 import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.PorterDuff;
@@ -30,6 +31,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -58,16 +60,11 @@ public class OpenCVHelper {
     }
 
     void processBitmapAsync(final Bitmap bitmap, final BitmapCallback callback) {
-        executorService.submit(new Runnable() {
-            @Override
-            public void run() {
-                try {
-//                    Bitmap newBitmap = removeBlemishes(bitmap);
-//                    callback.onBitmapProcessed(newBitmap);
-                    removeBlemishes(bitmap, callback);
-                } catch (Exception e) {
-                    callback.onError(e);
-                }
+        executorService.submit(() -> {
+            try {
+                removeBlemishes(bitmap, callback);
+            } catch (Exception e) {
+                callback.onError(e);
             }
         });
     }
@@ -89,6 +86,8 @@ public class OpenCVHelper {
                     Bitmap resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
 
                     if (!faces.isEmpty()) {
+                        // 병렬 처리를 위한 태스크 리스트 생성
+                        List<Callable<Void>> tasks = new ArrayList<>();
 
                         for (Face face : faces) {
                             List<FaceContour> contours = face.getAllContours();
@@ -99,19 +98,63 @@ public class OpenCVHelper {
                                 FaceContour contour = face.getContour(FaceContour.FACE);
                                 List<PointF> points = contour.getPoints();
 
-                                if(points.size() > 0) {
+                                if (points.size() > 0) {
                                     facePath.moveTo(points.get(0).x, points.get(0).y);
                                     for (int i = 1; i < points.size(); i++) {
                                         facePath.lineTo(points.get(i).x, points.get(i).y);
                                     }
                                     facePath.close();
 
-                                    Bitmap faceBitmap = getMaskedBitmap(bitmap, facePath);
-                                    Bitmap blurredFaceBitmap = applyBilateralFilter(faceBitmap);
+                                    Rect faceBounds = face.getBoundingBox();
 
-                                    combineBitmaps(resultBitmap, blurredFaceBitmap, facePath);
+                                    if (faceBounds.left < 0) {
+                                        faceBounds.left = 0;
+                                    }
+
+                                    if (faceBounds.top < 0) {
+                                        faceBounds.top = 0;
+                                    }
+
+                                    if (faceBounds.left + faceBounds.width() <= bitmap.getWidth() && faceBounds.top + faceBounds.height() <= bitmap.getHeight()) {
+                                        Bitmap faceBitmap = Bitmap.createBitmap(bitmap, faceBounds.left, faceBounds.top, faceBounds.width(), faceBounds.height());
+
+                                        // 각 얼굴 처리 작업을 Callable로 추가
+                                        tasks.add(new Callable<Void>() {
+                                            @Override
+                                            public Void call() {
+                                                Bitmap blurredFaceBitmap = applyBlemishRemoval(faceBitmap);
+
+                                                // 마스크 비트맵 생성
+                                                Bitmap maskBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                                                Canvas maskCanvas = new Canvas(maskBitmap);
+                                                Paint maskPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                                                maskPaint.setColor(Color.BLACK);
+                                                maskCanvas.drawPath(facePath, maskPaint);
+
+                                                // 블러된 얼굴 비트맵에 마스크 적용
+                                                Bitmap maskedBlurredFaceBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                                                Canvas maskedCanvas = new Canvas(maskedBlurredFaceBitmap);
+                                                maskedCanvas.drawBitmap(blurredFaceBitmap, faceBounds.left, faceBounds.top, null);
+                                                maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+                                                maskedCanvas.drawBitmap(maskBitmap, 0, 0, maskPaint);
+
+                                                // 결과 비트맵에 원본 비트맵 그리기
+                                                Canvas resultCanvas = new Canvas(resultBitmap);
+                                                resultCanvas.drawBitmap(maskedBlurredFaceBitmap, 0, 0, null);
+
+                                                return null;
+                                            }
+                                        });
+                                    }
                                 }
                             }
+                        }
+
+                        // 모든 얼굴 처리 작업을 병렬로 실행
+                        try {
+                            executorService.invokeAll(tasks);
+                        } catch (InterruptedException e) {
+                            callback.onError(e);
                         }
                     }
                     callback.onBitmapProcessed(resultBitmap);
@@ -120,56 +163,6 @@ public class OpenCVHelper {
                     // Handle error
                     callback.onError(e);
                 });
-    }
-
-    private Bitmap getMaskedBitmap(Bitmap bitmap, Path maskPath) {
-        Bitmap maskBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas maskCanvas = new Canvas(maskBitmap);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        maskCanvas.drawPath(maskPath, paint);
-
-        Bitmap resultBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas resultCanvas = new Canvas(resultBitmap);
-        Paint resultPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        resultCanvas.drawBitmap(bitmap, 0, 0, resultPaint);
-        resultPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        resultCanvas.drawBitmap(maskBitmap, 0, 0, resultPaint);
-        return resultBitmap;
-    }
-
-    private Bitmap applyBilateralFilter(Bitmap bitmap) {
-        Mat faceMat = new Mat(bitmap.getHeight(), bitmap.getWidth(), CvType.CV_8UC4);
-        Utils.bitmapToMat(bitmap, faceMat);
-
-        if (faceMat.type() != CvType.CV_8UC3) {
-            Imgproc.cvtColor(faceMat, faceMat, Imgproc.COLOR_RGBA2RGB);
-        }
-
-        Mat filteredMat = new Mat();
-        Imgproc.bilateralFilter(faceMat, filteredMat, 15, 75, 50);
-
-        Bitmap outputBitmap = Bitmap.createBitmap(filteredMat.cols(), filteredMat.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(filteredMat, outputBitmap);
-
-        faceMat.release();
-        filteredMat.release();
-
-        return outputBitmap;
-    }
-
-    private void combineBitmaps(Bitmap original, Bitmap filtered, Path facePath) {
-        Canvas canvas = new Canvas(original);
-
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        Bitmap maskBitmap = Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas maskCanvas = new Canvas(maskBitmap);
-        maskCanvas.drawPath(facePath, paint);
-
-        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
-        canvas.drawBitmap(filtered, 0, 0, paint);
-
-        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OVER));
-        canvas.drawBitmap(original, 0, 0, paint);
     }
 
 //    void removeBlemishes(Bitmap bitmap, BitmapCallback callback) {
@@ -245,22 +238,16 @@ public class OpenCVHelper {
 //        handlerThread.quitSafely();
     }
 
-    Bitmap removeBlemishes(Bitmap bitmap) {
+    Bitmap applyBlemishRemoval(Bitmap bitmap) {
         Mat faceMat = new Mat(bitmap.getHeight(), bitmap.getWidth(), CvType.CV_8UC4);
         Utils.bitmapToMat(bitmap, faceMat);
 
-        // Step 7: Apply blemish removal (Gaussian Blur in this example)
         if (faceMat.type() != CvType.CV_8UC3) {
             Imgproc.cvtColor(faceMat, faceMat, Imgproc.COLOR_RGBA2RGB);
         }
 
-        // Step 8: Apply blemish removal using Bilateral Filter
         Mat filteredMat = new Mat();
-
-        // Step 9: Apply blemish removal using Bilateral Filter
-        Imgproc.bilateralFilter(faceMat, filteredMat, 15, 75, 50);
-
-        // Step 8: Convert processed Mat back to Bitmap
+        Imgproc.bilateralFilter(faceMat, filteredMat, 9, 50, 50);
 
         Bitmap outputBitmap = Bitmap.createBitmap(filteredMat.cols(), filteredMat.rows(), Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(filteredMat, outputBitmap);
