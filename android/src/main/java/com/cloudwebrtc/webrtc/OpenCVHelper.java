@@ -117,16 +117,14 @@ public class OpenCVHelper {
                                     }
 
                                     if(faceBounds.left + faceBounds.width() <= bitmap.getWidth() && faceBounds.top + faceBounds.height() <= bitmap.getHeight()) {
-                                        Bitmap faceBitmap = Bitmap.createBitmap(bitmap, faceBounds.left, faceBounds.top, faceBounds.width(), faceBounds.height());
-                                        Bitmap blurredFaceBitmap = removeBlemishes(faceBitmap);
+                                        Bitmap faceBitmap = getMaskedBitmap(bitmap, facePath);
+                                        Bitmap blurredFaceBitmap = applyBilateralFilter(faceBitmap);
 
                                         Canvas faceCanvas = new Canvas(resultBitmap);
                                         Paint maskPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                                        maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
 
-                                        maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-
-                                        faceCanvas.drawBitmap(blurredFaceBitmap, faceBounds.left, faceBounds.top, null);
-                                        faceCanvas.drawPath(facePath, maskPaint);
+                                        faceCanvas.drawBitmap(blurredFaceBitmap, 0, 0, maskPaint);
 
                                     }
                                 }
@@ -139,6 +137,41 @@ public class OpenCVHelper {
                     // Handle error
                     callback.onError(e);
                 });
+    }
+
+    private Bitmap getMaskedBitmap(Bitmap bitmap, Path maskPath) {
+        Bitmap maskBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas maskCanvas = new Canvas(maskBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        maskCanvas.drawPath(maskPath, paint);
+
+        Bitmap resultBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas resultCanvas = new Canvas(resultBitmap);
+        Paint resultPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        resultCanvas.drawBitmap(bitmap, 0, 0, resultPaint);
+        resultPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+        resultCanvas.drawBitmap(maskBitmap, 0, 0, resultPaint);
+        return resultBitmap;
+    }
+
+    private Bitmap applyBilateralFilter(Bitmap bitmap) {
+        Mat faceMat = new Mat(bitmap.getHeight(), bitmap.getWidth(), CvType.CV_8UC4);
+        Utils.bitmapToMat(bitmap, faceMat);
+
+        if (faceMat.type() != CvType.CV_8UC3) {
+            Imgproc.cvtColor(faceMat, faceMat, Imgproc.COLOR_RGBA2RGB);
+        }
+
+        Mat filteredMat = new Mat();
+        Imgproc.bilateralFilter(faceMat, filteredMat, 15, 75, 50);
+
+        Bitmap outputBitmap = Bitmap.createBitmap(filteredMat.cols(), filteredMat.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(filteredMat, outputBitmap);
+
+        faceMat.release();
+        filteredMat.release();
+
+        return outputBitmap;
     }
 
 //    void removeBlemishes(Bitmap bitmap, BitmapCallback callback) {
