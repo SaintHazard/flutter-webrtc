@@ -7,6 +7,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
@@ -26,6 +27,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
@@ -37,61 +40,59 @@ import com.google.mlkit.vision.face.FaceLandmark;
 
 
 public class OpenCVHelper {
+    private HandlerThread handlerThread;
+    private Handler handler;
 
+    private ExecutorService executorService;
 
 
     public OpenCVHelper(Context context) {
+//        handlerThread = new HandlerThread("BitmapProcessorThread");
+//        start();
+//        handler = new Handler(handlerThread.getLooper());
 
+        executorService = Executors.newFixedThreadPool(4);
     }
 
-    Bitmap removeBlemishes(Bitmap bitmap, BitmapCallback callback) {
-        // FaceDetectorOptions 설정
-        FaceDetectorOptions options = new FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-                .build();
-
-        // FaceDetector 생성
-        FaceDetector detector = FaceDetection.getClient(options);
-
-        // InputImage 생성
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
-
-        // 비동기 작업으로 얼굴 감지
-        detector.process(image)
-                .addOnSuccessListener(faces -> {
-                    if(faces.isEmpty()) {
-                        callback.onBitmapProcessed(bitmap);
-                        return;
-                    }
-
-                    Bitmap resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-                    Canvas canvas = new Canvas(resultBitmap);
-                    Paint paint = new Paint();
-
-                    for (Face face : faces) {
-                        // 얼굴 영역 가져오기
-                        Rect bounds = face.getBoundingBox();
-
-                        // 가우시안 블러 적용
-                        Bitmap faceBitmap = Bitmap.createBitmap(resultBitmap, bounds.left, bounds.top, bounds.width(), bounds.height());
-                        Bitmap blurredFaceBitmap = removeBlemishes(faceBitmap);
-                        canvas.drawBitmap(blurredFaceBitmap, bounds.left, bounds.top, paint);
-                    }
-
-                    callback.onBitmapProcessed(resultBitmap);
-
-                    // 결과 Bitmap 반환
-                    // 여기서 필요한 경우 메인 스레드에 결과를 전달해야 함
-                    // 예: imageView.setImageBitmap(resultBitmap);
-                })
-                .addOnFailureListener(e -> {
-                    // 에러 처리
+    void processBitmapAsync(final Bitmap bitmap, final BitmapCallback callback) {
+        executorService.submit(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Bitmap newBitmap = removeBlemishes(bitmap);
+                    callback.onBitmapProcessed(newBitmap);
+//                    removeBlemishes(bitmap, callback);
+                } catch (Exception e) {
                     callback.onError(e);
-                });
+                }
+            }
+        });
+    }
 
-        return bitmap; // 비동기 작업이므로 결과를 즉시 반환할 수 없고, 콜백을 통해 처리해야 함
+//    void processBitmapAsync(final Bitmap bitmap, final BitmapCallback callback) {
+//        handler.post(new Runnable() {
+//            @Override
+//            public void run() {
+//                removeBlemishes(bitmap, callback);
+////                try {
+////                    // Your bitmap processing logic
+////                    Bitmap processedBitmap = removeBlemishes(bitmap);
+////                    callback.onBitmapProcessed(processedBitmap);
+////                } catch (Exception e) {
+////                    callback.onError(e);
+////                }
+//            }
+//        });
+//    }
+
+    void start() {
+//        if(handlerThread.isAlive() == false) {
+//            handlerThread.start();
+//        }
+    }
+
+    void stop() {
+//        handlerThread.quitSafely();
     }
 
     Bitmap removeBlemishes(Bitmap bitmap) {
@@ -119,5 +120,7 @@ public class OpenCVHelper {
 
         return outputBitmap;
     }
+
+
 
 }

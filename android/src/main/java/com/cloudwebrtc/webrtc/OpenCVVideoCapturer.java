@@ -18,6 +18,9 @@ public class OpenCVVideoCapturer implements VideoCapturer {
     private Context context;
     private static final String TAG = "OpenCVVideoCapturer";
 
+    private int frameCount = 0;
+    private static final int FRAME_SKIP = 5; // 5번째 프레임마다 처리
+
     public OpenCVVideoCapturer(VideoCapturer videoCapturer, Context context) {
         this.videoCapturer = videoCapturer;
         this.openCVHelper = new OpenCVHelper(context);
@@ -41,10 +44,21 @@ public class OpenCVVideoCapturer implements VideoCapturer {
             @Override
             public void onFrameCaptured(VideoFrame frame) {
                 Bitmap bitmap = convertVideoFrameToBitmap(frame);
-                Bitmap newBitmap = openCVHelper.removeBlemishes(bitmap);
+                openCVHelper.processBitmapAsync(bitmap, new BitmapCallback() {
+                    @Override
+                    public void onBitmapProcessed(Bitmap bitmap) {
+                        VideoFrame processedFrame = convertBitmapToVideoFrame(bitmap);
+                        capturerObserver.onFrameCaptured(processedFrame);
+                        processedFrame.release();
+                    }
 
-                VideoFrame processedFrame = convertBitmapToVideoFrame(newBitmap);
-                capturerObserver.onFrameCaptured(processedFrame);
+                    @Override
+                    public void onError(Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+
+
 
 
 //                openCVHelper.removeBlemishes(bitmap, new BitmapCallback() {
@@ -154,13 +168,54 @@ public class OpenCVVideoCapturer implements VideoCapturer {
         return rotatedBitmap;
     }
 
+    Bitmap convertYUVToBitmap(I420Buffer i420Buffer, int rotation) {
+        int width = i420Buffer.getWidth();
+        int height = i420Buffer.getHeight();
+        ByteBuffer yBuffer = i420Buffer.getDataY();
+        ByteBuffer uBuffer = i420Buffer.getDataU();
+        ByteBuffer vBuffer = i420Buffer.getDataV();
+
+        int[] argb = new int[width * height];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int Y = yBuffer.get(y * i420Buffer.getStrideY() + x) & 0xFF;
+                int U = uBuffer.get((y / 2) * i420Buffer.getStrideU() + (x / 2)) & 0xFF;
+                int V = vBuffer.get((y / 2) * i420Buffer.getStrideV() + (x / 2)) & 0xFF;
+
+                // YUV to RGB 변환 최적화
+                int R = clamp((int) (Y + 1.370705 * (V - 128)));
+                int G = clamp((int) (Y - 0.698001 * (V - 128) - 0.337633 * (U - 128)));
+                int B = clamp((int) (Y + 1.732446 * (U - 128)));
+
+                argb[y * width + x] = 0xFF000000 | (R << 16) | (G << 8) | B;
+            }
+        }
+
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        bitmap.setPixels(argb, 0, width, 0, 0, width, height);
+
+        Matrix matrix = new Matrix();
+        matrix.postRotate(rotation);
+
+        Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height, matrix, true);
+        i420Buffer.release();
+
+        return rotatedBitmap;
+    }
+
+    private int clamp(int value) {
+        return value < 0 ? 0 : value > 255 ? 255 : value;
+    }
+
     @Override
     public void startCapture(int width, int height, int framerate) {
+        openCVHelper.start();
         videoCapturer.startCapture(width, height, framerate);
     }
 
     @Override
     public void stopCapture() throws InterruptedException {
+        openCVHelper.stop();
         videoCapturer.stopCapture();
     }
 
