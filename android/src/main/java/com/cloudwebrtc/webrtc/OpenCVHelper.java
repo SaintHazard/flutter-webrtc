@@ -106,27 +106,10 @@ public class OpenCVHelper {
                                     }
                                     facePath.close();
 
-                                    Rect faceBounds = face.getBoundingBox();
+                                    Bitmap faceBitmap = getMaskedBitmap(bitmap, facePath);
+                                    Bitmap blurredFaceBitmap = applyBilateralFilter(faceBitmap);
 
-                                    if(faceBounds.left < 0) {
-                                        faceBounds.left = 0;
-                                    }
-
-                                    if(faceBounds.top < 0) {
-                                        faceBounds.top = 0;
-                                    }
-
-                                    if(faceBounds.left + faceBounds.width() <= bitmap.getWidth() && faceBounds.top + faceBounds.height() <= bitmap.getHeight()) {
-                                        Bitmap faceBitmap = getMaskedBitmap(bitmap, facePath);
-                                        Bitmap blurredFaceBitmap = applyBilateralFilter(faceBitmap);
-
-                                        Canvas faceCanvas = new Canvas(resultBitmap);
-                                        Paint maskPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                                        maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
-
-                                        faceCanvas.drawBitmap(blurredFaceBitmap, 0, 0, maskPaint);
-
-                                    }
+                                    combineBitmaps(resultBitmap, blurredFaceBitmap, facePath);
                                 }
                             }
                         }
@@ -172,6 +155,21 @@ public class OpenCVHelper {
         filteredMat.release();
 
         return outputBitmap;
+    }
+
+    private void combineBitmaps(Bitmap original, Bitmap filtered, Path facePath) {
+        Canvas canvas = new Canvas(original);
+
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Bitmap maskBitmap = Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas maskCanvas = new Canvas(maskBitmap);
+        maskCanvas.drawPath(facePath, paint);
+
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(filtered, 0, 0, paint);
+
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OVER));
+        canvas.drawBitmap(original, 0, 0, paint);
     }
 
 //    void removeBlemishes(Bitmap bitmap, BitmapCallback callback) {
