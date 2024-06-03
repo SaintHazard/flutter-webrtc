@@ -281,7 +281,7 @@ class GetUserMediaImpl {
                     videoCapturer = enumerator.createCapturer(name, new CameraEventsHandler());
                     if (videoCapturer != null) {
                         Log.d(TAG, "create user specified camera " + name + " succeeded");
-                        result.put(name, videoCapturer);
+                        result.put(name, new OpenCVVideoCapturer(videoCapturer, applicationContext));
                         return result;
                     } else {
                         Log.d(TAG, "create user specified camera " + name + " failed");
@@ -299,7 +299,7 @@ class GetUserMediaImpl {
                 if (videoCapturer != null) {
                     Log.d(TAG, "Create " + facingStr + " camera " + name + " succeeded");
 
-                    result.put(name, videoCapturer);
+                    result.put(name, new OpenCVVideoCapturer(videoCapturer, applicationContext));
                     return result;
                 } else {
                     Log.e(TAG, "Create " + facingStr + " camera " + name + " failed");
@@ -311,7 +311,7 @@ class GetUserMediaImpl {
         if (videoCapturer == null && deviceNames.length > 0) {
             videoCapturer = enumerator.createCapturer(deviceNames[0], new CameraEventsHandler());
             Log.d(TAG, "Falling back to the first available camera");
-            result.put(deviceNames[0], videoCapturer);
+            result.put(deviceNames[0], new OpenCVVideoCapturer(videoCapturer, applicationContext));
         }
 
         return result;
