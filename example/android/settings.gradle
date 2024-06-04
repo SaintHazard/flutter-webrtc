@@ -11,4 +11,4 @@ assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
 apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
 
 include ":opencv"
-project(':opencv').projectDir = new File(rootProject.projectDir, '../../android/opencv')
+project(':opencv').projectDir = new File(rootProject.projectDir, '../../../opencv')

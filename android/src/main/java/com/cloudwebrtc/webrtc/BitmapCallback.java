@@ -1,9 +1,7 @@
 package com.cloudwebrtc.webrtc;
-
-
-import android.graphics.Bitmap;
+import org.webrtc.VideoFrame;
 
 public interface BitmapCallback {
-    void onBitmapProcessed(Bitmap bitmap);
+    void onBitmapProcessed(VideoFrame videoFrame);
     void onError(Exception e);
 }
