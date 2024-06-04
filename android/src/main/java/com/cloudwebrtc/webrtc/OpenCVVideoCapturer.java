@@ -49,24 +49,8 @@ public class OpenCVVideoCapturer implements VideoCapturer {
             }
 
 //            @Override
-//            public void onFrameCaptured(VideoFrame frame) {
-//                frameCount++;
-//                if (frameCount % FRAME_DROP_INTERVAL != 0) {
-//                    // 드롭된 프레임은 원본 프레임을 그대로 전달
-//                    capturerObserver.onFrameCaptured(frame);
-//                    return;
-//                }
-//
-//                Bitmap bitmap = convertVideoFrameToBitmap(frame);
-//                VideoFrame processedFrame = convertBitmapToVideoFrame(bitmap);
-//                capturerObserver.onFrameCaptured(frame);
-//                processedFrame.release();
-//            }
-
-
-//            @Override
             public void onFrameCaptured(VideoFrame frame) {
-                openCVHelper.processBitmapAsync(frame, new BitmapCallback() {
+                openCVHelper.processBitmapAsync(frame, true, new BitmapCallback() {
                     @Override
                     public void onBitmapProcessed(VideoFrame processedFrame) {
                         capturerObserver.onFrameCaptured(processedFrame);
@@ -76,7 +60,7 @@ public class OpenCVVideoCapturer implements VideoCapturer {
                     public void onError(Exception e) {
                         e.printStackTrace();
                     }
-                }, false);
+                });
             }
         });
     }
