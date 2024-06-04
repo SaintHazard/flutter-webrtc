@@ -99,6 +99,22 @@ public class OpenCVHelper {
                                     }
                                     facePath.close();
 
+                                    // 눈과 입술 윤곽선 탐지
+                                    Path eyesAndMouthPath = new Path();
+                                    for (int contourType : new int[]{FaceContour.LEFT_EYE, FaceContour.RIGHT_EYE, FaceContour.UPPER_LIP_TOP, FaceContour.UPPER_LIP_BOTTOM, FaceContour.LOWER_LIP_TOP, FaceContour.LOWER_LIP_BOTTOM}) {
+                                        FaceContour eyesAndMouthContour = face.getContour(contourType);
+                                        if (eyesAndMouthContour != null) {
+                                            List<PointF> eyesAndMouthPoints = eyesAndMouthContour.getPoints();
+                                            if (!eyesAndMouthPoints.isEmpty()) {
+                                                eyesAndMouthPath.moveTo(eyesAndMouthPoints.get(0).x, eyesAndMouthPoints.get(0).y);
+                                                for (int i = 1; i < eyesAndMouthPoints.size(); i++) {
+                                                    eyesAndMouthPath.lineTo(eyesAndMouthPoints.get(i).x, eyesAndMouthPoints.get(i).y);
+                                                }
+                                                eyesAndMouthPath.close();
+                                            }
+                                        }
+                                    }
+
                                     Rect faceBounds = face.getBoundingBox();
 
                                     if (faceBounds.left < 0) {
@@ -119,21 +135,20 @@ public class OpenCVHelper {
                                             public Void call() {
                                                 Bitmap blurredFaceBitmap = applyBlemishRemoval(faceBitmap);
 
-                                                // 마스크 비트맵 생성
                                                 Bitmap maskBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
                                                 Canvas maskCanvas = new Canvas(maskBitmap);
                                                 Paint maskPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                                                 maskPaint.setColor(Color.BLACK);
                                                 maskCanvas.drawPath(facePath, maskPaint);
+                                                maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
+                                                maskCanvas.drawPath(eyesAndMouthPath, maskPaint);
 
-                                                // 블러된 얼굴 비트맵에 마스크 적용
                                                 Bitmap maskedBlurredFaceBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
                                                 Canvas maskedCanvas = new Canvas(maskedBlurredFaceBitmap);
                                                 maskedCanvas.drawBitmap(blurredFaceBitmap, faceBounds.left, faceBounds.top, null);
                                                 maskPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
                                                 maskedCanvas.drawBitmap(maskBitmap, 0, 0, maskPaint);
 
-                                                // 결과 비트맵에 원본 비트맵 그리기
                                                 synchronized (resultBitmap) {
                                                     Canvas resultCanvas = new Canvas(resultBitmap);
                                                     resultCanvas.drawBitmap(maskedBlurredFaceBitmap, 0, 0, null);
@@ -174,7 +189,7 @@ public class OpenCVHelper {
         }
 
         Mat filteredMat = new Mat();
-        Imgproc.bilateralFilter(faceMat, filteredMat, 5, 50, 50);
+        Imgproc.bilateralFilter(faceMat, filteredMat, 5, 75, 50);
 
         Bitmap outputBitmap = Bitmap.createBitmap(filteredMat.cols(), filteredMat.rows(), Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(filteredMat, outputBitmap);
