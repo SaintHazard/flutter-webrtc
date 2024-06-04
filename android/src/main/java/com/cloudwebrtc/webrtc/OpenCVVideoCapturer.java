@@ -76,7 +76,7 @@ public class OpenCVVideoCapturer implements VideoCapturer {
                     public void onError(Exception e) {
                         e.printStackTrace();
                     }
-                });
+                }, false);
             }
         });
     }

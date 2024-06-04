@@ -43,20 +43,34 @@ public class OpenCVHelper {
         executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }
 
-    void processBitmapAsync(final VideoFrame videoFrame, final BitmapCallback callback) {
+    void processBitmapAsync(final VideoFrame videoFrame, final BitmapCallback callback, boolean useBitmap) {
+        if(useBitmap == false) {
+            callback.onBitmapProcessed(videoFrame);
+            return;
+        }
         Bitmap bitmap = convertVideoFrameToBitmap(videoFrame);
 
         executorService.submit(() -> {
             try {
-                removeBlemishes(bitmap, callback, true);
+                boolean faceDetector = false;
+                boolean filter = false;
+                removeBlemishes(bitmap, callback, faceDetector, filter);
             } catch (Exception e) {
                 callback.onError(e);
             }
         });
     }
 
-    void removeBlemishes(Bitmap bitmap, BitmapCallback callback, boolean withFilter) {
+    void removeBlemishes(Bitmap bitmap, BitmapCallback callback, boolean withFaceDetector, boolean withFilter) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
+
+        if(withFaceDetector == false) {
+            Bitmap resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+            VideoFrame processedFrame = convertBitmapToVideoFrame(resultBitmap);
+            callback.onBitmapProcessed(processedFrame);
+            processedFrame.release();
+            return;
+        }
 
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
