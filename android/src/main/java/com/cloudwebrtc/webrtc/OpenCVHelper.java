@@ -12,23 +12,11 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
-import android.renderscript.Allocation;
-import android.renderscript.Element;
-import android.renderscript.RenderScript;
-import android.renderscript.ScriptIntrinsicBlur;
-import android.util.Log;
-//import org.opencv.core.Rect;
 
 import org.opencv.android.Utils;
 import org.opencv.core.*;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.objdetect.CascadeClassifier;
-import org.opencv.photo.Photo;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -41,7 +29,6 @@ import com.google.mlkit.vision.face.FaceContour;
 import com.google.mlkit.vision.face.FaceDetection;
 import com.google.mlkit.vision.face.FaceDetector;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
-import com.google.mlkit.vision.face.FaceLandmark;
 
 
 public class OpenCVHelper {
@@ -49,6 +36,8 @@ public class OpenCVHelper {
     private Handler handler;
 
     private ExecutorService executorService;
+
+
 
 
     public OpenCVHelper(Context context) {

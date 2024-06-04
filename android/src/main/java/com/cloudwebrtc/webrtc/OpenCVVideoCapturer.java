@@ -1,5 +1,7 @@
 package com.cloudwebrtc.webrtc;
 import android.content.Context;
+
+import org.opencv.android.OpenCVLoader;
 import org.webrtc.CapturerObserver;
 import org.webrtc.JavaI420Buffer;
 import org.webrtc.SurfaceTextureHelper;
@@ -8,6 +10,8 @@ import org.webrtc.VideoFrame;
 
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
+import android.util.Log;
+
 import java.nio.ByteBuffer;
 import org.webrtc.VideoFrame.I420Buffer;
 
@@ -18,10 +22,16 @@ public class OpenCVVideoCapturer implements VideoCapturer {
     private Context context;
     private static final String TAG = "OpenCVVideoCapturer";
 
-    private int frameCount = 0;
-    private static final int FRAME_SKIP = 5; // 5번째 프레임마다 처리
+    static {
+        if (!OpenCVLoader.initLocal()) {
+            Log.d("OpenCV", "OpenCV initialization failed");
+        } else {
+            Log.d("OpenCV", "OpenCV initialization succeeded");
+        }
+    }
 
     public OpenCVVideoCapturer(VideoCapturer videoCapturer, Context context) {
+
         this.videoCapturer = videoCapturer;
         this.openCVHelper = new OpenCVHelper(context);
         this.context = context;

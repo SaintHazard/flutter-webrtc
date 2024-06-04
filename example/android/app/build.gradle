@@ -52,7 +52,13 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+
+    dependencies {
+        implementation project(path: ":opencv")
+    }
+
 }
+
 
 flutter {
     source '../..'
