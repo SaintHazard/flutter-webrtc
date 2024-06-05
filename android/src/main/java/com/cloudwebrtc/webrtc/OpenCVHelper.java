@@ -51,10 +51,6 @@ public class OpenCVHelper {
             callback.onBitmapProcessed(videoFrame);
             return;
         }
-//        Mat mat = convertVideoFrameToMat(videoFrame);
-//        VideoFrame result = convertMatToVideoFrame(mat);
-//
-//        callback.onBitmapProcessed(result);
 
         Bitmap bitmap = convertVideoFrameToBitmap(videoFrame);
 
